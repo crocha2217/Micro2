@@ -1,0 +1,63 @@
+SRC +=	../common/lib/rp2040-vectors.S \
+		../common/lib/rp2040-crt.S \
+		../common/lib/bl2.S
+
+OBJ := $(SRC:%.c=%.o)
+OBJ := $(OBJ:%.S=%.o)
+
+CROSS_COMPILE ?= arm-none-eabi-
+
+CFLAGS :=	-mcpu=cortex-m0plus \
+			-I../common/include \
+			-mthumb \
+			-mno-thumb-interwork \
+			-Os \
+			-ffunction-sections \
+			-fdata-sections
+
+ASFLAGS :=	$(CFLAGS)
+
+LDFLAGS :=	-Wl,--gc-sections \
+			-Wl,-T../common/lib/rp2040.ld \
+			-Wl,-T../common/lib/ioregs.ld \
+			-Wl,-Map=$(ELF:%.elf=%.map) \
+			-nostdlib
+
+CC := $(CROSS_COMPILE)gcc
+AS := $(CROSS_COMPILE)gcc
+LD := $(CROSS_COMPILE)gcc
+
+ifeq (,$(shell which picotool 2>/dev/null))
+ifeq (,$(shell find $(PICOTOOL_PATH) -iname picotool -type f -executable))
+$(error No picotool found in PATH or PICOTOOL_PATH)
+else
+PICOTOOL := $(PICOTOOL_PATH)/picotool
+endif
+else
+PICOTOOL := $(shell which picotool)
+endif
+
+.PHONY: all clean debug uf2
+
+all: $(ELF)
+
+clean:
+	-rm -f $(OBJ) $(ELF) $(ELF:%.elf=%.map) $(ELF:%.elf=%.uf2)
+
+debug: CFLAGS += -g
+debug: ASFLAGS += -g
+debug: all
+
+uf2: $(ELF:%.elf=%.uf2)
+
+$(ELF:%.elf=%.uf2): $(ELF)
+	$(PICOTOOL) uf2 convert $< $@ --family rp2040
+
+$(ELF): $(OBJ)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+%.o: %.S
+	$(AS) $(ASFLAGS) -c $< -o $@

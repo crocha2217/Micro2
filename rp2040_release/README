@@ -1,0 +1,2 @@
+Place your C runtime, Vector Table, and Linker script in the common/lib
+directory.
